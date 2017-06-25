@@ -1,0 +1,111 @@
+#! /usr/bin/env bash
+#####################
+usage ()
+{
+    echo "$0 -c [Run command] -o [Output file name] (-q [Queue name] -l (to show log) -w (to show works in queue) -d (destroy queue) )" >&2
+    exit 1
+}
+
+#####################
+
+destroy () {
+    if [ ! -f ${QUEUE}_tmp ]; then
+        echo "No Queue Exists" >&2
+        exit 1
+    else
+        echo "exit" > ${QUEUE}_tmp
+        exit 0
+    fi
+}
+
+RUN=""
+OUTPUT="/dev/null"
+QUEUE="/tmp/queue"
+LOG_FILE="/tmp/queue.log"
+DESTROY=0
+LOG=0
+SHOW_WORK=0
+
+# parse options
+while [ $# -gt 0 ]
+do
+    case "$1" in
+        -c) RUN="$2" ; shift ;;
+        -o) OUTPUT="$2" ; shift ;;
+        -q) QUEUE=/tmp/"$2" ; shift ;;
+        -d) DESTROY=1 ; shift ;;
+        -l) LOG=1 ; shift ;;
+        -w) SHOW_WORK=1 ; shift ;;
+        --) shift; break ;;
+        -*) usage ;;
+        *) break ;;  # arguments ...
+    esac
+    shift
+done
+
+producer () {
+    while true ; do
+        sleep 0.1
+        while read line < ${QUEUE}_tmp ;do
+            echo $line > ${QUEUE}
+            sed -i "1d" ${QUEUE}_tmp
+        done
+    done
+}
+
+progress () {
+    # read whatever from the named pipe.
+    while read job < ${QUEUE}
+    do
+        if [[ $job = 'exit' ]]; then
+            kill -9 $p_pid
+            rm -rf ${QUEUE}_tmp
+            rm -rf ${QUEUE}
+            rm -rf ${LOG_FILE}
+            echo 'Done processing jobs'
+            exit
+        fi
+        echo "`date`] running job:" $job >> ${LOG_FILE}
+        (eval "$job")
+        echo "`date`] end job:" $job >> ${LOG_FILE}
+    done
+}
+
+show_log () {
+    tail -f ${LOG_FILE}
+}
+
+show_work () {
+    cat ${QUEUE}_tmp
+}
+
+if [ ${DESTROY} == 1 ]; then
+    destroy
+fi
+
+if [ ! -f ${QUEUE}_tmp ]; then
+    touch ${QUEUE}_tmp
+    mkfifo ${QUEUE}
+    producer &
+    p_pid=$!
+    progress &
+fi
+
+if [[ "$RUN" != "" ]]; then
+    if [[ "$RUN" == "exit" ]]; then
+        flock -x -w 1 ${QUEUE}_tmp echo ${RUN} >> ${QUEUE}_tmp
+    else
+        flock -x -w 1 ${QUEUE}_tmp echo "${RUN} >> \"${OUTPUT}\" 2>> \"${OUTPUT}\" " >> ${QUEUE}_tmp
+    fi
+fi
+
+if [ ${LOG} == 1 ]; then
+    show_log
+    exit 0
+fi
+
+if [ ${SHOW_WORK} == 1 ]; then
+    show_work
+    exit 0
+fi
+

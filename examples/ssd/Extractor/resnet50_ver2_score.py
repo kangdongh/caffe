@@ -11,59 +11,70 @@ import subprocess
 import sys
 
 # Add extra layers on top of a "base" network (e.g. VGGNet or Inception).
-def AddExtraLayers(net, use_batchnorm=True, lr_mult=1):
+def AddExtraLayers(net, use_batchnorm=True, lr_mult=1, use_global_stats = False):
     use_relu = True
 
     # Add additional convolutional layers.
-    # 19 x 19
+    # 38 x 38
     from_layer = net.keys()[-1]
+    
+    # TODO(weiliu89): Construct the name using the last layer to avoid duplication.
+    # 19 x 19
+    out_layer = "conv5_1"
+    ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 256, 1, 0, 1,
+        lr_mult=lr_mult)
+
+    from_layer = out_layer
+    out_layer = "conv5_2"
+    ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 512, 3, 1, 2,
+        lr_mult=lr_mult)
+    
 
     # TODO(weiliu89): Construct the name using the last layer to avoid duplication.
     # 10 x 10
     out_layer = "conv6_1"
     ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 256, 1, 0, 1,
-        lr_mult=lr_mult)
+        lr_mult=lr_mult, use_global_stats = use_global_stats)
 
     from_layer = out_layer
     out_layer = "conv6_2"
     ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 512, 3, 1, 2,
-        lr_mult=lr_mult)
+        lr_mult=lr_mult, use_global_stats = use_global_stats)
 
     # 5 x 5
     from_layer = out_layer
     out_layer = "conv7_1"
     ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 128, 1, 0, 1,
-      lr_mult=lr_mult)
+      lr_mult=lr_mult, use_global_stats = use_global_stats)
 
     from_layer = out_layer
     out_layer = "conv7_2"
     ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 256, 3, 1, 2,
-      lr_mult=lr_mult)
+      lr_mult=lr_mult, use_global_stats = use_global_stats)
 
     # 3 x 3
     from_layer = out_layer
     out_layer = "conv8_1"
     ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 128, 1, 0, 1,
-      lr_mult=lr_mult)
+      lr_mult=lr_mult, use_global_stats = use_global_stats)
 
     from_layer = out_layer
     out_layer = "conv8_2"
     ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 256, 3, 0, 1,
-      lr_mult=lr_mult)
+      lr_mult=lr_mult, use_global_stats = use_global_stats)
 
     # 1 x 1
     from_layer = out_layer
     out_layer = "conv9_1"
     ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 128, 1, 0, 1,
-      lr_mult=lr_mult)
+      lr_mult=lr_mult, use_global_stats = use_global_stats)
 
     from_layer = out_layer
     out_layer = "conv9_2"
     ConvBNLayer(net, from_layer, out_layer, use_batchnorm, use_relu, 256, 3, 0, 1,
-      lr_mult=lr_mult)
+      lr_mult=lr_mult, use_global_stats = use_global_stats)
 
     return net
-
 
 ### Modify the following parameters accordingly ###
 # Notice: we do evaluation by setting the solver parameters approximately.
@@ -224,7 +235,7 @@ use_batchnorm = True
 lr_mult = 1
 # Use different initial learning rate.
 if use_batchnorm:
-    base_lr = 0.0004
+    base_lr = 0.0003
 else:
     # A learning rate for batch_size = 1, num_gpus = 1.
     base_lr = 0.00004
@@ -232,14 +243,14 @@ else:
 # The job name should be same as the name used in examples/ssd/ssd_pascal.py.
 job_name = "SSD_{}".format(resize)
 # The name of the model. Modify it if you want.
-model_name = "VGG_VOC0712_{}".format(job_name)
+model_name = "ResNet_VOC0712_{}".format(job_name)
 
 # Directory which stores the model .prototxt file.
-save_dir = "models/VGGNet/VOC0712/{}_score".format(job_name)
+save_dir = "models/ResNet/VOC0712/{}_score".format(job_name)
 # Directory which stores the snapshot of trained models.
-snapshot_dir = "models/VGGNet/VOC0712/{}".format(job_name)
+snapshot_dir = "models/ResNet/VOC0712/{}".format(job_name)
 # Directory which stores the job script and log file.
-job_dir = "jobs/VGGNet/VOC0712/{}_score".format(job_name)
+job_dir = "jobs/DHTrying/VOC0712/{}_score".format(job_name)
 # Directory which stores the detection results.
 output_result_dir = "{}/data/VOCdevkit/results/VOC2007/{}_score/Main".format(os.environ['HOME'], job_name)
 
@@ -308,13 +319,13 @@ loss_param = {
 # parameters for generating priors.
 # minimum dimension of input image
 min_dim = 300
-# conv4_3 ==> 38 x 38
-# fc7 ==> 19 x 19
+# res4b5 ==> 38 x 38
+# conv5_2 ==> 19 x 19
 # conv6_2 ==> 10 x 10
 # conv7_2 ==> 5 x 5
 # conv8_2 ==> 3 x 3
 # conv9_2 ==> 1 x 1
-mbox_source_layers = ['conv4_3', 'fc7', 'conv6_2', 'conv7_2', 'conv8_2', 'conv9_2']
+mbox_source_layers = ['res4b5', 'conv5_2', 'conv6_2', 'conv7_2', 'conv8_2', 'conv9_2']
 # in percent %
 min_ratio = 20
 max_ratio = 90
@@ -443,8 +454,7 @@ net.data, net.label = CreateAnnotatedDataLayer(train_data, batch_size=batch_size
         train=True, output_label=True, label_map_file=label_map_file,
         transform_param=train_transform_param, batch_sampler=batch_sampler)
 
-VGGNetBody(net, from_layer='data', fully_conv=True, reduced=True, dilated=True,
-    dropout=False)
+ResNetBody(net, from_layer='data', use_dilation_conv4=True, use_dilation_conv5=True, conv5_dilated=4, use_pool5=False)
 
 AddExtraLayers(net, use_batchnorm, lr_mult=lr_mult)
 
@@ -472,8 +482,7 @@ net.data, net.label = CreateAnnotatedDataLayer(test_data, batch_size=test_batch_
         train=False, output_label=True, label_map_file=label_map_file,
         transform_param=test_transform_param)
 
-VGGNetBody(net, from_layer='data', fully_conv=True, reduced=True, dilated=True,
-    dropout=False)
+ResNetBody(net, from_layer='data', use_dilation_conv4=True, use_dilation_conv5=True, use_pool5=False, conv5_dilated=4, use_global_stats=True)
 
 AddExtraLayers(net, use_batchnorm, lr_mult=lr_mult)
 

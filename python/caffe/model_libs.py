@@ -33,16 +33,16 @@ def ConvBNLayer(net, from_layer, out_layer, use_bn, use_relu, num_output,
     scale_prefix='', scale_postfix='_scale', bias_prefix='', bias_postfix='_bias',
     **bn_params):
   if use_bn:
+    bias = bn_params.get('bias_enable', False)
     # parameters for convolution layer with batchnorm.
     kwargs = {
         'param': [dict(lr_mult=lr_mult, decay_mult=1)],
         'weight_filler': dict(type='gaussian', std=0.01),
-        'bias_term': False,
+        'bias_term': bias,
         }
     eps = bn_params.get('eps', 0.001)
     moving_average_fraction = bn_params.get('moving_average_fraction', 0.999)
     use_global_stats = bn_params.get('use_global_stats', False)
-    # parameters for batchnorm layer.
     bn_kwargs = {
         'param': [
             dict(lr_mult=0, decay_mult=0),
@@ -448,7 +448,13 @@ def VGGNetBody(net, from_layer, need_fc=True, fully_conv=False, reduced=False,
     return net
 
 
-def ResNet101Body(net, from_layer, use_pool5=True, use_dilation_conv5=False, **bn_param):
+def ResNetBody(net, from_layer, num_layer=50, use_pool5=True, use_dilation_conv4=False,use_dilation_conv5=False, conv5_dilated = 2, **bn_param):
+    if num_layer == 50:
+        block4 = 6
+        bias_enable = True
+    else:
+        block4 = 23 
+        bias_enable = False
     conv_prefix = ''
     conv_postfix = ''
     bn_prefix = 'bn_'
@@ -459,7 +465,7 @@ def ResNet101Body(net, from_layer, use_pool5=True, use_dilation_conv5=False, **b
         num_output=64, kernel_size=7, pad=3, stride=2,
         conv_prefix=conv_prefix, conv_postfix=conv_postfix,
         bn_prefix=bn_prefix, bn_postfix=bn_postfix,
-        scale_prefix=scale_prefix, scale_postfix=scale_postfix, **bn_param)
+        scale_prefix=scale_prefix, scale_postfix=scale_postfix, bias_enable = bias_enable, **bn_param)
 
     net.pool1 = L.Pooling(net.conv1, pool=P.Pooling.MAX, kernel_size=3, stride=2)
 
@@ -475,21 +481,31 @@ def ResNet101Body(net, from_layer, use_pool5=True, use_dilation_conv5=False, **b
       ResBody(net, from_layer, block_name, out2a=128, out2b=128, out2c=512, stride=1, use_branch1=False, **bn_param)
       from_layer = 'res{}'.format(block_name)
 
-    ResBody(net, from_layer, '4a', out2a=256, out2b=256, out2c=1024, stride=2, use_branch1=True, **bn_param)
-
-    from_layer = 'res4a'
-    for i in xrange(1, 23):
-      block_name = '4b{}'.format(i)
-      ResBody(net, from_layer, block_name, out2a=256, out2b=256, out2c=1024, stride=1, use_branch1=False, **bn_param)
-      from_layer = 'res{}'.format(block_name)
-
     stride = 2
     dilation = 1
-    if use_dilation_conv5:
+    if use_dilation_conv4:
       stride = 1
+      dilation = 1
+    ResBody(net, from_layer, '4a', out2a=256, out2b=256, out2c=1024, stride=stride, dilation = dilation, use_branch1=True, **bn_param)
+    
+    if use_dilation_conv4:
       dilation = 2
 
+    from_layer = 'res4a'
+    for i in xrange(1, block4):
+      block_name = '4b{}'.format(i)
+      ResBody(net, from_layer, block_name, out2a=256, out2b=256, out2c=1024, stride=1, dilation = dilation ,use_branch1=False, **bn_param)
+      from_layer = 'res{}'.format(block_name)
+
+
+    if use_dilation_conv5:
+        stride = 1
+        # dilation = 1 # customized
     ResBody(net, from_layer, '5a', out2a=512, out2b=512, out2c=2048, stride=stride, use_branch1=True, dilation=dilation, **bn_param)
+    
+    if use_dilation_conv5:
+      dilation = conv5_dilated
+    
     ResBody(net, 'res5a', '5b', out2a=512, out2b=512, out2c=2048, stride=1, use_branch1=False, dilation=dilation, **bn_param)
     ResBody(net, 'res5b', '5c', out2a=512, out2b=512, out2c=2048, stride=1, use_branch1=False, dilation=dilation, **bn_param)
 
