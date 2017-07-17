@@ -378,7 +378,7 @@ elif normalization_mode == P.Loss.FULL:
 
 # Evaluate on whole test set.
 num_test_image = 4952
-test_batch_size = 8
+test_batch_size = 1
 # Ideally test_batch_size should be divisible by num_test_image,
 # otherwise mAP will be slightly off the true value.
 test_iter = int(math.ceil(float(num_test_image) / test_batch_size))
@@ -448,32 +448,32 @@ make_if_not_exist(job_dir)
 make_if_not_exist(snapshot_dir)
 
 # Create train net.
-net = caffe.NetSpec()
-net.data, net.label = CreateAnnotatedDataLayer(train_data, batch_size=batch_size_per_device,
-        train=True, output_label=True, label_map_file=label_map_file,
-        transform_param=train_transform_param, batch_sampler=batch_sampler)
-
-InceptionV3Body(net, from_layer='data', use_dilation_conv5=True, use_pool5=False)
-
-AddExtraLayers(net, use_batchnorm, lr_mult=lr_mult)
-
-mbox_layers = CreateMultiBoxHead(net, data_layer='data', from_layers=mbox_source_layers,
-        use_batchnorm=use_batchnorm, min_sizes=min_sizes, max_sizes=max_sizes,
-        aspect_ratios=aspect_ratios, steps=steps, normalizations=normalizations,
-        num_classes=num_classes, share_location=share_location, flip=flip, clip=clip,
-        prior_variance=prior_variance, kernel_size=3, pad=1, lr_mult=lr_mult)
-
-# Create the MultiBoxLossLayer.
-name = "mbox_loss"
-mbox_layers.append(net.label)
-net[name] = L.MultiBoxLoss(*mbox_layers, multibox_loss_param=multibox_loss_param,
-        loss_param=loss_param, include=dict(phase=caffe_pb2.Phase.Value('TRAIN')),
-        propagate_down=[True, True, False, False])
-
-with open(train_net_file, 'w') as f:
-    print('name: "{}_train"'.format(model_name), file=f)
-    print(net.to_proto(), file=f)
-shutil.copy(train_net_file, job_dir)
+#net = caffe.NetSpec()
+#net.data, net.label = CreateAnnotatedDataLayer(train_data, batch_size=batch_size_per_device,
+#        train=True, output_label=True, label_map_file=label_map_file,
+#        transform_param=train_transform_param, batch_sampler=batch_sampler)
+#
+#InceptionV3Body(net, from_layer='data', use_dilation_conv5=True, use_pool5=False)
+#
+#AddExtraLayers(net, use_batchnorm, lr_mult=lr_mult)
+#
+#mbox_layers = CreateMultiBoxHead(net, data_layer='data', from_layers=mbox_source_layers,
+#        use_batchnorm=use_batchnorm, min_sizes=min_sizes, max_sizes=max_sizes,
+#        aspect_ratios=aspect_ratios, steps=steps, normalizations=normalizations,
+#        num_classes=num_classes, share_location=share_location, flip=flip, clip=clip,
+#        prior_variance=prior_variance, kernel_size=3, pad=1, lr_mult=lr_mult)
+#
+## Create the MultiBoxLossLayer.
+#name = "mbox_loss"
+#mbox_layers.append(net.label)
+#net[name] = L.MultiBoxLoss(*mbox_layers, multibox_loss_param=multibox_loss_param,
+#        loss_param=loss_param, include=dict(phase=caffe_pb2.Phase.Value('TRAIN')),
+#        propagate_down=[True, True, False, False])
+#
+#with open(train_net_file, 'w') as f:
+#    print('name: "{}_train"'.format(model_name), file=f)
+#    print(net.to_proto(), file=f)
+#shutil.copy(train_net_file, job_dir)
 
 # Create test net.
 net = caffe.NetSpec()
@@ -546,9 +546,11 @@ shutil.copy(solver_file, job_dir)
 # Create job file.
 with open(job_file, 'w') as f:
   f.write('cd {}\n'.format(caffe_root))
-  f.write('./build/tools/caffe train \\\n')
-  f.write('--solver="{}" \\\n'.format(solver_file))
+  f.write('./build/tools/caffe test \\\n')
+  #f.write('--solver="{}" \\\n'.format(solver_file))
+  f.write('-model "{}" \\\n'.format(test_net_file))
   f.write('--weights="{}" \\\n'.format(pretrain_model))
+  f.write('-iterations "{}" \\\n'.format(test_iter))
   if solver_param['solver_mode'] == P.Solver.GPU:
     f.write('--gpu {} 2>&1 | tee {}/{}_test{}.log\n'.format(gpus, job_dir, model_name, max_iter))
   else:

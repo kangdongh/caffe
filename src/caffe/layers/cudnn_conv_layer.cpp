@@ -9,8 +9,8 @@ namespace caffe {
 // Set to three for the benefit of the backward pass, which
 // can use separate streams for calculating the gradient w.r.t.
 // bias, filter weights, and bottom data for each group independently
-#define CUDNN_STREAMS_PER_GROUP 3
-
+#define CUDNN_STREAMS_PER_GROUP 1
+	
 /**
  * TODO(dox) explain cuDNN interface
  */
